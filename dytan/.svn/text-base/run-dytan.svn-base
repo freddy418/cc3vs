@@ -1,0 +1,13 @@
+#!/bin/sh
+
+PROG=$@
+
+if [ $# == 0 ]
+then
+    echo "Usage"
+    echo "$0 <command line>"
+    exit
+fi
+
+PINHOME=~/pin-2.5-22117-gcc.4.0.0-ia32_intel64-linux
+$PINHOME/ia32/bin/pinbin -t dytan -- $PROG

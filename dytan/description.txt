@@ -1,0 +1,84 @@
+Goal
+----
+
+The goal of this project is to create a publicly available version of
+the Dytan dynamic tainting framework.
+
+Background
+----------
+
+ o Dytan paper:
+   http://www.cc.gatech.edu/~clause/publications/clause.li.orso.issta07.pdf
+
+ o x86 instruction set, linux system calls (Intel:
+   http://www.intel.com/products/processor/manuals/index.htm
+
+ o General C++ development methodologies
+
+Tasks
+-----
+
+ [ Symbol meaning:
+  o == to be done
+  * == in progress
+  X == done]
+ ]
+
+ o Gain familiarity with background information listed above
+ o Gain familiarity with Pin instrumentation framework, esp static /
+   dynamic instrumentation phases: http://rogue.colorado.edu/pin/
+ o Develop xml format / parser for Dytan configuration
+ o Implement propagation functions for remaining x86 functions
+   --- understand instruction sematics
+ o Polish control flow graph building / control flow propagation
+
+Possible additional tasks
+-------------------------
+
+ o Create high level representation to automatically generate
+   propagation functions
+
+Requirements
+------------
+ o libxml2
+
+Design
+------
+ - Taint sources : Taint sources are a description of program data (memory locations)
+   that can be initialized with taint marks
+    - What are the types : function return value, path IO, network IO
+    - How many taint markings to be used : single, multiple
+    - How are taint markings associated for IO sources : per read, per byte
+ - Propagation policies : describes how taint markings should be propagated during execution
+    - How to identify affecting data : control flow or data flow
+    - How to define mapping function : 
+ - Taint sinks : Location in the code where user wants to perform check on the taint markings
+   of one or more memory locations
+    - Specification : ID, mem location, code location, checking operation
+    - Checking operation can be user specified
+    - Predefined checking functions in which get called before certain instructions
+
+Low level design
+----------------
+ - Taint sources : how is tainting done
+    - For IO sources, sys calls have to be monitored.
+    
+ - Instrumentation has to be done at statement-level for carrying out propagation and checking
+ - 
+
+ - Syscall monitor
+    - Instrument system calls on calling activate()
+    - Add system call observers
+    - During execution, if there is a system call, check if there is an observer for that syscall. 
+      Invoke the callback
+
+ - Path monitor
+    - Register the open, read, close system calls
+    - If the open or close calls happen, then do some stupid bookkeeping
+    - If read happens, check if it is the file that we are interested in, and make the callback
+
+
+ - Tainting path and network sources
+    - Obtain the source from config file. Read taint type
+    - Depending on taint type, register an observer for sys calls of that source
+    - That listener/observer will taint

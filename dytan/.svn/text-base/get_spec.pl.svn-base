@@ -1,0 +1,270 @@
+#!/usr/bin/perl
+use strict;
+use Cwd;
+use Getopt::Long;
+
+# number of arguments to this script
+my $numargs = $#ARGV + 1;
+# flag for printing help information
+my $help;
+# input type - reference or test
+my $ref;
+my $test;
+# bench location
+my $spectop = "/ufs/lockbox/deng/benches/SPEC2000/";
+# current directory
+my $currdir = getcwd;
+# directory to copy spec into
+my $rundir = $currdir."/obj-ia32";
+# jobs to run
+my @tasks;
+# names of the benchmarks
+my @benchmarks = qw(gzip vpr gcc mcf parser perlbmk bzip2 twolf mesa art equake);
+# length of temporal period to examine
+my $period = 1000000;
+
+sub usage
+{
+    print "Unknown option: @_\n" if ( @_ );
+    print "usage: get_spec.pl [-t | -r]\n";
+    exit;
+}
+
+usage() if (!GetOptions('help|?' => \$help,
+                        'ref' => \$ref,
+			'test' => \$test)
+	    or $numargs < 1 or defined $help or (!(defined $ref) && !(defined $test)) or ((defined $ref) && (defined $test)));
+
+if (!(-d $rundir)) {
+  mkdir $rundir or die $!;
+}
+
+# 4/21/11 - need test inputs for vpr, gcc, mcf, crafty, parser, gap, vortex
+
+#gzip
+system("cd ${rundir}; cp ${spectop}/CINT2000/164.gzip/src/gzip.1 gzip");
+# ref
+if (defined $ref){
+    system("cd ${rundir}; cp ${spectop}/CINT2000/164.gzip/data/ref/input/input.program ginput.program");
+}
+elsif(defined $test){
+# test
+    system("cd ${rundir}; cp ${spectop}/CINT2000/164.gzip/data/test/input/input.compressed ginput.compressed");
+}
+
+#vpr
+system("cd ${rundir}; cp ${spectop}/CINT2000/175.vpr/src/vpr.1 vpr");
+# ref
+if (defined $ref){
+    system("cd ${rundir}; cp ${spectop}/CINT2000/175.vpr/data/ref/input/arch.in arch.in");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/175.vpr/data/ref/input/net.in net.in");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/175.vpr/data/ref/input/place.in place.in");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp ${spectop}/CINT2000/175.vpr/data/test/input/arch.in arch.in");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/175.vpr/data/test/input/net.in net.in");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/175.vpr/data/test/input/place.in place.in");
+}
+
+#gcc
+system("cd ${rundir}; cp ${spectop}/CINT2000/176.gcc/src/cc1.1 cc1");
+if (defined $ref){
+# ref
+    system("cd ${rundir}; cp ${spectop}/CINT2000/176.gcc/data/ref/input/200.i 200.i");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp ${spectop}/CINT2000/176.gcc/data/test/input/cccp.i cccp.i");
+}
+
+#mcf
+system("cd ${rundir}; cp ${spectop}/CINT2000/181.mcf/src/mcf.1 mcf");
+if (defined $ref){
+    system("cd ${rundir}; cp ${spectop}/CINT2000/181.mcf/data/ref/input/inp.in mcf.in");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp ${spectop}/CINT2000/181.mcf/data/test/input/inp.in mcf.in");
+}
+
+#crafty
+system("cd ${rundir}; cp ${spectop}/CINT2000/186.crafty/src/crafty.1 crafty");
+if (defined $ref){
+    system("cd ${rundir}; cp ${spectop}/CINT2000/186.crafty/data/ref/input/crafty.in .");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp ${spectop}/CINT2000/186.crafty/data/test/input/crafty.in .");
+}
+
+#parser
+system("cd ${rundir}; cp ${spectop}/CINT2000/197.parser/src/parser.1 parser");
+system("cd ${rundir}; cp ${spectop}/CINT2000/197.parser/data/all/input/2.1.dict .");
+system("cd ${rundir}; cp -r ${spectop}/CINT2000/197.parser/data/all/input/words .");
+if (defined $ref){
+    system("cd ${rundir}; cp ${spectop}/CINT2000/197.parser/data/ref/input/ref.in pref.in");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp ${spectop}/CINT2000/197.parser/data/test/input/test.in ptest.in");
+}
+
+#perlbmk
+system("cd ${rundir}; cp ${spectop}/CINT2000/253.perlbmk/src/perlbmk.1 perlbmk");
+system("cd ${rundir}; cp -r ${spectop}/CINT2000/253.perlbmk/data/all/input/* .");
+if (defined $ref){
+    system("cd ${rundir}; cp ${spectop}/CINT2000/253.perlbmk/data/ref/input/diffmail.in .");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/253.perlbmk/data/ref/input/splitmail.in  .");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/253.perlbmk/data/ref/input/splitmail.pl .");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp ${spectop}/CINT2000/253.perlbmk/data/test/input/test.in .");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/253.perlbmk/data/test/input/test.pl .");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/253.perlbmk/data/test/input/*.pm .");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/253.perlbmk/data/test/input/*.t .");
+}
+
+#gap
+system("cd ${rundir}; cp ${spectop}/CINT2000/254.gap/src/gap.1 gap");
+system("cd ${rundir}; cp -r ${spectop}/CINT2000/254.gap/data/all/input/* .");
+if (defined $ref){
+    system("cd ${rundir}; cp -r ${spectop}/CINT2000/254.gap/data/ref/input/ref.in gref.in");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp -r ${spectop}/CINT2000/254.gap/data/test/input/test.in gtest.in");
+}
+
+#vortex
+system("cd ${rundir}; cp ${spectop}/CINT2000/255.vortex/src/vortex.1 vortex");
+if (defined $ref){
+    system("cd ${rundir}; cp ${spectop}/CINT2000/255.vortex/data/ref/input/lendian1.raw .");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/255.vortex/data/ref/input/persons.1k .");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp ${spectop}/CINT2000/255.vortex/data/test/input/lendian.raw .");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/255.vortex/data/test/input/lendian.rnv .");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/255.vortex/data/test/input/lendian.wnv .");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/255.vortex/data/test/input/persons.1k .");
+}
+
+#bzip2
+system("cd ${rundir}; cp ${spectop}/CINT2000/256.bzip2/src/bzip.1 bzip2");
+if (defined $ref){
+    system("cd ${rundir}; cp ${spectop}/CINT2000/256.bzip2/data/ref/input/input.program binput.program");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/256.bzip2/data/ref/input/control .");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp ${spectop}/CINT2000/256.bzip2/data/test/input/input.random binput.random");
+    system("cd ${rundir}; cp ${spectop}/CINT2000/256.bzip2/data/test/input/control .");
+}
+
+#twolf
+system("cd ${rundir}; cp ${spectop}/CINT2000/300.twolf/src/twolf.1 twolf");
+if (defined $ref){
+    system("cd ${rundir}; cp -r ${spectop}/CINT2000/300.twolf/data/ref/input/* .");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp -r ${spectop}/CINT2000/300.twolf/data/test/input/* .");
+}
+
+#mesa
+system("cd ${rundir}; cp ${spectop}/CFP2000/177.mesa/src/mesa.1 mesa");
+if (defined $ref){
+    system("cd ${rundir}; cp -r ${spectop}/CFP2000/177.mesa/data/ref/input/* .");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp -r ${spectop}/CFP2000/177.mesa/data/test/input/* .");
+}
+
+#art
+system("cd ${rundir}; cp ${spectop}/CFP2000/179.art/src/art.1 art");
+if (defined $ref){
+    system("cd ${rundir}; cp -rf ${spectop}/CFP2000/179.art/data/ref/input/* .");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp -rf ${spectop}/CFP2000/179.art/data/test/input/* .");
+}
+
+#equake
+system("cd ${rundir}; cp ${spectop}/CFP2000/183.equake/src/equake.1 equake");
+if (defined $ref){
+    system("cd ${rundir}; cp ${spectop}/CFP2000/183.equake/data/ref/input/inp.in equake.in");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp ${spectop}/CFP2000/183.equake/data/test/input/inp.in equake.in");
+}
+
+#ammp
+system("cd ${rundir}; cp ${spectop}/CFP2000/188.ammp/src/ammp.1 ammp");
+if (defined $ref){
+    system("cd ${rundir}; cp ${spectop}/CFP2000/188.ammp/data/ref/input/* .");
+}
+elsif (defined $test){
+# test
+    system("cd ${rundir}; cp ${spectop}/CFP2000/188.ammp/data/test/input/* .");
+}
+
+print "SPEC2000 benchmarks with ";
+
+if (defined $ref){
+    print "reference";
+}
+elsif (defined $test){
+    print "test";
+}
+
+print " inputs copied from ${spectop} to ${rundir}\n";
+
+if (defined $test){
+# test inputs
+    @tasks = ("./gzip ginput.compressed 2",
+	      "./vpr net.in arch.in place.out dum.out -nodisp -place_only -init_t 5 -exit_t 0.005 -alpha_t 0.9412 -inner_num 2",
+	      "./cc1 cccp.i -o cccp.s",
+	      "./mcf inp.in",
+	      "./parser 2.1.dict -batch < ptest.in",
+	      "./perlbmk -I. -I./lib test.pl < test.in",
+	      "./bzip2 binput.random 2",
+	      "./twolf test",
+	      "./mesa -frames 10 -meshfile mesa.in -ppmfile mesa.ppm",
+	      "./art -scanfile c756hel.in -trainfile1 a10.img -trainfile2 hc.img -stride 2 -startx 134 -starty 220 -endx 139 -endy 225 -objects 1",
+	      "./equake < equake.in");
+}
+elsif (defined $ref){
+# reference inputs
+    @tasks = ("./gzip ginput.program 60",
+	      "./vpr net.in arch.in place.out dum.out -nodisp -place_only -init_t 5 -exit_t 0.005 -alpha_t 0.9412 -inner_num 2",
+	      "./cc1 200.i -o 200.s",
+	      "./mcf mcf.in",
+	      "./parser 2.1.dict -batch < pref.in",
+	      "./perlbmk -I./lib splitmail.pl 850 5 19 18 1500 > 850.5.19.18.1500.out",
+	      "./bzip2 binput.program 58",
+	      "./twolf ref",
+	      "./mesa -frames 1000 -meshfile mesa.in -ppmfile mesa.ppm",
+	      "./art -scanfile c756hel.in -trainfile1 a10.img -trainfile2 hc.img -stride 2 -startx 110 -starty 200 -endx 160 -endy 240 -objects 10",
+	      "./equake < equake.in");
+}
+
+print "\nGenerating commands to run spec benchmarks in run_spec.sh\n\n";
+my $pname = "".($period/1000000)."M";
+
+open(OUT, ">run_spec.sh");
+print OUT "#!/bin/sh\n\n";
+for (my $i=0;$i<@tasks;$i++){
+    print OUT "../../../../pin -t dytan -o ${benchmarks[$i]} -start_address main -- ${tasks[$i]}\n";
+    print OUT "tar -pczf ${benchmarks[$i]}.tar.gz ${benchmarks[$i]}*.log\n";
+    print OUT "rm  ${benchmarks[$i]}*.log\n";
+    #print OUT "../../../../pin -t debugtrace -o ${benchmarks[$i]}_p${pname}.log -p ${period} -q 500 -start_address main -- ${tasks[$i]} &\n";
+}
+print OUT "wait\n";
+close(OUT);
+
+print "\n*DONE*\n\n";

@@ -1,0 +1,22 @@
+<dytan-config>
+    <sources>
+        <source type="network">
+            <host>*</host>
+            <port>*</port>
+        </source>
+    </sources>
+    <propagation>
+        <dataflow>true</dataflow>
+        <controlflow>false</controlflow>
+    </propagation>
+    <sinks>
+        <sink>
+            <id>36</id>
+            <location type="instruction">
+                <instruction>ret</instruction>
+                <instruction>jmp</instruction>
+            </location>
+            <action>validate-absence</action>
+        </sink>
+    </sinks>
+</dytan-config>
