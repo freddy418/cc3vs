@@ -171,7 +171,7 @@ int main(int argc, char** argv){
       //printf("socket (%d, %d): %s\n", bytes, errno, buf);
       sscanf(buf, "%s %x %s", buf1, &addr, buf2);
       value = strtoull(buf2, NULL, 16);
-      addr = addr << 1;
+      addr = addr << OFFSET;
       //printf("type: %s, addr: %08X, value: %lX\n", buf1, addr, value);
 
       isRead = strncmp(buf1, "read", 4);
