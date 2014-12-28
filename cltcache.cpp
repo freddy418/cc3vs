@@ -1,11 +1,18 @@
 #include "cltcache.h"
 
 cltcache::cltcache(i32 ncs, i32 nus, i32 ofs){
-
-  cl2 = new rgcache(ncs, ofs);
-  ul2 = new ccache(1, nus, 8, ofs);
-  cl2->set_name("RG");
-  ul2->set_name("VL");
+  if (ncs > 0){
+    cl2 = new rgcache(ncs, ofs);
+    cl2->set_name("RG");
+  }else{
+    cl2 = 0;
+  }
+  if (nus > 0){
+    ul2 = new ccache(1, nus, 8, ofs);
+    ul2->set_name("VL");
+  }else{
+    cl2 = 0;
+  }
 
   oshift = 3 - ofs;
   os = ofs;
@@ -33,13 +40,22 @@ void cltcache::write(i32 addr, i64 data){
   i32 uh, ch;
   i32 hit = 0;
 
-  if (addr == 4294952612){
+  /*if (addr == 4294952612){
     printf("Writing %llu to addr(%u)\n", data, addr);
-  }
+    }*/
   
   // TODO: check if value already exists in either cache and write one, invalidate the other
-  ch = cl2->check(addr);
-  uh = ul2->check(addr);
+  if (cl2 != 0){
+    ch = cl2->check(addr);
+  }else{
+    ch = 0;
+  }
+  if (ul2 != 0){
+    uh = ul2->check(addr);
+  }else{
+    uh = 0;
+  }
+
   if (ch == 1 && uh ==1){
     printf("CL2(%u) and UL2(%u) must be mutually exclusive for addr(%u)!\n", ch, uh, addr);
     assert(0);

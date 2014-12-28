@@ -1,9 +1,10 @@
 PROG = cache_sim
 CC = g++
+DO = 1
 SRCS = utils.cpp store.cpp memmap.cpp tcache.cpp ccache.cpp rgcache.cpp cltcache.cpp cache_sim.cpp
 OBJS = ${SRCS:.cpp=.o}
 CFLAGS = -g -O3 -fno-omit-frame-pointer -DTARGET_IA32 -DHOST_IA32 -DTARGET_LINUX
-CFLAGS+= -DOFFSET=3
+CFLAGS+= -DOFFSET=$(DO)
 
 .SUFFIXES: .o .cpp
 
