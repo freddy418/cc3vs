@@ -286,17 +286,17 @@ i32 ccache::write(i32 addr, i64 data){
     block = &(sets[index].blks[hitway]);
   }else{
     //misses++;
-    hitway = sets[index].lru->val;
-    block = &(sets[index].blks[hitway]);
+    //hitway = sets[index].lru->val;
+    //block = &(sets[index].blks[hitway]);
     //printf("miss to index: %d on tag: %x, replaced %d\n", index, tag, hitway);
-    if (block->valid == 1 && block->dirty == 1){
+    /*if (block->valid == 1 && block->dirty == 1){
       // lock line in next level
       if (next_level != 0){
 	next_level->touch(addr);
       }
       wbaddr =  ((block->tag)<<(ishift+bshift)) + (index<<bshift);
       this->writeback(block, wbaddr);
-    }
+      }*/
     this->refill(addr, data);
   }
 
