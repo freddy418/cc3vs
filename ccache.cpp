@@ -80,6 +80,10 @@ void ccache::annul(i32 addr){
   i32 hitway = 0;
   cache_block* bp;
 
+  /*if (addr == 2928741272){
+    printf("Annuling %x in %s\n", addr, name);
+    }*/
+
   // check tags
   for(i32 i=0;i<assoc;i++){
     if ((sets[index].blks[i].tag == tag) && (sets[index].blks[i].valid == 1)){
@@ -89,6 +93,7 @@ void ccache::annul(i32 addr){
 
   bp = &(sets[index].blks[hitway]);
   bp->valid = 0;
+  free(bp->value);
 }
 
 void ccache::writeback(cache_block* bp, i32 addr){
@@ -196,28 +201,27 @@ void ccache::copy(i32 addr, cache_block* op){
 void ccache::refill(i32 addr, i64 data){
   i32 index, tag, line, wbaddr;
   cache_block* bp;
-  i64* dp = new i64[bvals];
 
-  dp[0] = data;
   index = 0; //(addr >> bshift) & imask; -- Fully Associative shortcut
   tag = (addr >> (bshift + ishift));
   line = sets[index].lru->val;
   bp = &(sets[index].blks[line]);
 
-  if (bp->valid == 1 && bp->dirty == 1){
+  if (bp->valid ==1 && bp->dirty == 1){
     if (next_level != 0){
       next_level->touch(addr);
     }
     wbaddr = ((bp->tag)<<(ishift+bshift)) + (index<<bshift);
     this->writeback(bp, wbaddr);
-    free(bp->value);
   }
   
   bp->tag = tag;
+  if (bp->valid != 1){
+    bp->value = new i64[bvals];
+  }
+  bp->value[0] = data;
   bp->valid = 1;
   bp->dirty = 0;
-  bp->value = dp;
-
   update_lru(&(sets[index]), line);
 }
 
@@ -266,6 +270,9 @@ i32 ccache::write(i32 addr, i64 data){
   printf("Calling ccache write for addr(%X) tag(%X)\n", addr, tag);
 #endif
 
+  /*if (addr == 2928741272){
+    printf("Writing %llx to %x in %s\n", data, addr, name);
+    }*/
   /*if (index < 16){
     printf("\tIndex %d manipulated in ccache::write, hitway: %u\n", index, hitway);
     }*/
@@ -285,25 +292,27 @@ i32 ccache::write(i32 addr, i64 data){
     hits++;
     block = &(sets[index].blks[hitway]);
   }else{
-    //misses++;
-    //hitway = sets[index].lru->val;
-    //block = &(sets[index].blks[hitway]);
-    //printf("miss to index: %d on tag: %x, replaced %d\n", index, tag, hitway);
-    /*if (block->valid == 1 && block->dirty == 1){
+    hitway = sets[index].lru->val;
+    block = &(sets[index].blks[hitway]);
+    if (block->valid == 1 && block->dirty == 1){
       // lock line in next level
       if (next_level != 0){
 	next_level->touch(addr);
       }
       wbaddr =  ((block->tag)<<(ishift+bshift)) + (index<<bshift);
       this->writeback(block, wbaddr);
-      }*/
-    this->refill(addr, data);
+    }
+    // skip the refill
   }
-
-  //block->value[((addr>>oshift)&bmask)] = data;
+  
+  block->tag = tag;
+  if (block->valid != 1){
+    block->value = new i64[bvals];
+  }
+  block->value[0] = data;
+  block->valid = 1;
   block->dirty = 1;
   this->update_lru(&(sets[index]), hitway);
-  //accs++;
 
   return hit;
 }

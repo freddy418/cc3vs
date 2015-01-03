@@ -62,13 +62,20 @@ void cltcache::write(i32 addr, i64 data){
   }
 
   if (data == 0){
+    
     hit = cl2->write(addr, data);
     if (uh == 1){
       ul2->annul(addr);
     }
   }else{
+    /*if (addr == 2928741272){
+      printf("Writing %llx to %x in ul2\n", data, addr);
+      }*/
     hit = ul2->write(addr, data);
     if (ch == 1){
+      /*if (addr == 2928741272){
+	printf("Annuling %x in cl2\n", addr);
+	}*/
       cl2->annul(addr);
     }
   }
@@ -124,7 +131,7 @@ i64 cltcache::read(i32 addr){
   ch = cl2->check(addr);
   uh = ul2->check(addr);
 
-  /*if (addr == 4294952612){
+  /*if (addr == 2928741272){
     printf("Read(%u) from ch(%u) and uh(%u)\n", addr, ch, uh);
     }*/
 

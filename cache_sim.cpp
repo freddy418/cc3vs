@@ -65,8 +65,8 @@ int main(int argc, char** argv){
   unsigned int blocks; // number of blocks in VL1
   unsigned int l2sets, l2assoc; // uncompressed L2 parameters
   unsigned int bsize, assoc, addr, zero, isRead;
-  unsigned long value;
-  unsigned long sval;
+  unsigned long long value;
+  unsigned long long sval;
   unsigned int skip;
 
   ranges = atoi(argv[1]);
@@ -85,7 +85,7 @@ int main(int argc, char** argv){
 
   dl1->set_nl(dl2);
   dl2->set_mem(sp);
-  //dl2->set_map(mp);
+  dl2->set_map(mp);
   dl1->set_name("L1");
   dl2->set_name("L2");
 
@@ -172,8 +172,7 @@ int main(int argc, char** argv){
       sscanf(buf, "%s %x %s", buf1, &addr, buf2);
       value = strtoull(buf2, NULL, 16);
       addr = addr << OFFSET;
-      //printf("type: %s, addr: %08X, value: %lX\n", buf1, addr, value);
-
+      
       isRead = strncmp(buf1, "read", 4);
       if (mp != 0){
 	zero = mp->lookup(addr);
@@ -185,15 +184,20 @@ int main(int argc, char** argv){
       dl1->set_anum(lines);
       dl2->set_anum(lines);
 
+      /*if (addr == 2928741272){
+	printf("type: %s, addr: %X, value: %llX, zero: %d\n", buf1, addr >> 1, value, zero);
+	}*/
+
       if (isRead == 0){
 	// check the map first
 	if (zero == 1){
+	  //printf("Performing the read\n");
 	  sval = dl1->read(addr);
 	}else{
 	  sval = 0;
 	}
 	if (sval != value){
-	  if (zero == 0){
+	  /*if (zero == 0){
 	    if (mp != 0){
 	      mp->update_block(addr, 1);
 	    }
@@ -205,9 +209,11 @@ int main(int argc, char** argv){
 	    dl1->write(addr, value);
 	    dl1->set_accs(dl1->get_accs() - 1);
 	    dl1->set_hits(dl1->get_hits() - 1);	      
-	    //printf("Access(%u): Store and trace unmatched for addr (%X): s(%lX), t(%lX)\n", lines, addr, sval, value);
+	    //printf("
 	    mismatches++;
-	  }
+	    }*/
+	  printf("Access(%u): Store and trace unmatched for addr (%x): s(%llX), t(%llX)\n", lines, addr >> 1, sval, value);
+	  assert(0);
 	}
 	else{
 	  if (sval == 0 && zero == 0 && mp != 0){
@@ -217,7 +223,7 @@ int main(int argc, char** argv){
       }else{
 	if (zero == 0 && mp != 0){
 	  mp->update_block(addr, 1);
-	  //printf("Calling cache_allocate for %08X\n", addr);
+	  //printf("Calling cache_allocate for %X\n", addr);
 	  dl1->allocate(addr); // special function to allocate a cache line with all zero
 	}
 	dl1->write(addr, value);
