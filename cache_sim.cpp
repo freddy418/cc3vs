@@ -79,7 +79,7 @@ int main(int argc, char** argv){
   // initialize cache and local variables;
   cltcache* dl1 = new cltcache(ranges, blocks, OFFSET);
   tcache* dl2 = new tcache(l2sets, l2assoc, bsize, OFFSET);
-  mem_map* mp = new mem_map(0, 4096, bsize, 32, OFFSET); // added enable (0-off,1-on)
+  mem_map* mp = new mem_map(1, 4096, bsize, 32, OFFSET); // added enable (0-off,1-on)
   tmemory* sp = new tmemory(OFFSET);
   FILE *in;
 
@@ -184,9 +184,9 @@ int main(int argc, char** argv){
       dl1->set_anum(lines);
       dl2->set_anum(lines);
 
-      /*if (addr == 2928741272){
-	printf("type: %s, addr: %X, value: %llX, zero: %d\n", buf1, addr >> 1, value, zero);
-	}*/
+      if (addr == 2923986208){
+	printf("CACHESIM: %s, addr: %X, value: %llX, zero: %d\n", buf1, addr, value, zero);
+      }
 
       if (isRead == 0){
 	// check the map first
@@ -212,7 +212,7 @@ int main(int argc, char** argv){
 	    //printf("
 	    mismatches++;
 	    }*/
-	  printf("Access(%u): Store and trace unmatched for addr (%x): s(%llX), t(%llX)\n", lines, addr >> 1, sval, value);
+	  printf("Access(%u): Store and trace unmatched for addr (%x): s(%llX), t(%llX)\n", lines, addr, sval, value);
 	  assert(0);
 	}
 	else{

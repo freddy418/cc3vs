@@ -41,6 +41,10 @@ void rgcache::annul(i32 addr){
   // TODO: implement me
   i32 hitway = nsets;
 
+  /*if (addr == 4294941704){
+    printf("Annuling %x in %s\n", addr, name);
+    }*/
+
   for (i32 i=0;i<nsets;i++){
     if (lines[i].la <= addr && lines[i].ha >= addr && lines[i].valid == 1){
 #ifdef DEBUG
@@ -61,7 +65,7 @@ void rgcache::annul(i32 addr){
     /*if (addr == 4294952612){
       printf("Annul(%u): invalidate range entry(%u-%u)\n", addr);
       }*/
-   lines[hitway].dirty = 0;
+    lines[hitway].dirty = 0;
     lines[hitway].valid = 0;
   }
   // case b: decrement low end of existing range      
@@ -359,6 +363,9 @@ void rgcache::writeback(i32 index){
     for (i32 i=lines[index].la;i<=lines[index].ha;i+=dsize){
 
       //printf("writing %llu to L2 at %u\n", lines[index].value, i);
+      /*if (i == 4294941704){
+	printf("Writing back (%llx) for addr (%x)\n", lines[index].value, i);
+	}*/
 
       next_level->write(i, lines[index].value);
       //mem->write(i, lines[index].value);

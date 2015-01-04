@@ -68,6 +68,7 @@ void tcache::clearstats(){
 }
 
 void tcache::writeback(cache_block* bp, i32 addr){
+  i32 ret = 0;
   i32 zero = 0;
 
   // L1 cache
@@ -85,19 +86,30 @@ void tcache::writeback(cache_block* bp, i32 addr){
       }
     }
     if (zero == 0){ // all zeros
-      map->update_block(addr, 0);
+      // only call this if map is enabled - how?
+      ret = map->update_block(addr, 0);
     }
   }
 
-  if (mem != 0 && (zero == 1 || map == 0)){
+  /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
+    printf("%s Writing back (%x) zero(%u) mem(%u) map(%u) ret(%u) ", name, addr, zero, mem, map, ret);
+    }*/
+
+  if (mem != 0 && (zero == 1 || map == 0 || ret == 0)){
     for (i32 i=0;i<bvals;i++){
-      
       //printf("writing %llu to mem at %u\n", bp->value[i], (addr & amask) + (i<<oshift));
+      /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
+	printf("%llx,", bp->value[i]);
+	}*/
 
       mem->write((addr & amask) + (i<<oshift), bp->value[i]);
     }
     bwused += bsize;
   }
+
+  /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
+    printf("\n");
+    }*/
 
   //bwused += bsize;
   bp->dirty = 0;
@@ -107,6 +119,10 @@ void tcache::writeback(cache_block* bp, i32 addr){
 void tcache::allocate(i32 addr){
   i32 tag, index, hit, hitway, wbaddr;
   cache_block* bp;
+
+  if ((addr & amask) <= 4294941704 && (addr & amask) + bvals > 4294941704){
+    printf("%s allocating line for (%x)\n", name, addr);
+  }
 
   index = (addr >> bshift) & imask;
   tag = (addr >> (bshift + ishift));
@@ -179,6 +195,10 @@ void tcache::copy(i32 addr, cache_block* op){
   i32 tag, index, hitway, wbaddr, hit;
   cache_block* bp;
 
+  if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
+    printf("%s copying to (%x)\n", name, addr);
+  }
+
   index = (addr >> bshift) & imask;
   tag = (addr >> (bshift + ishift));
   hitway = sets[index].lru->val;
@@ -222,6 +242,10 @@ void tcache::refill(cache_block* bp, i32 addr){
   tag = (addr >> (bshift + ishift)); 
   index = (addr >> bshift) & imask;
   
+  /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
+    printf("%s refilling to (%x) ", name, addr);
+    }*/
+
   bp->tag = tag;
   bp->valid = 1;
   bp->dirty = 0;
@@ -247,10 +271,16 @@ void tcache::refill(cache_block* bp, i32 addr){
     //exit(1);
     for (i=0;i<bvals;i++){
       bp->value[i] = mem->read((addr & amask) + (i<<oshift));
+      /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
+	printf("%llx,", bp->value[i]);
+	}*/
     }
     bwused += bsize;
   }
   //printf("block size: %d, index: %d, addr: %X, bmask: %X\n", (bsize), (addr>>bshift)&(bmask), addr, bmask);
+  /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
+    printf("\n");
+    }*/
 }
 
 i64 tcache::read(i32 addr){
@@ -267,6 +297,7 @@ i64 tcache::read(i32 addr){
     if ((sets[index].blks[i].tag == tag) && (sets[index].blks[i].valid == 1)){
       hit = 1;
       hitway = i;
+      break;
     }
   }
 
@@ -308,6 +339,10 @@ i64 tcache::read(i32 addr){
 
   //printf("bsize(%u), sets(%u) - Access: read, addr(%X), index(%X), tag(%X), block(%X)\n", bsize, nsets, addr, index, tag, ((addr>>(oshift))&bmask));
 
+  /*if (addr == 4294941704){
+    printf("%s Reading (%llx) from addr (%x) in index(%u) and way(%u)\n", name, block->value[((addr>>(oshift))&bmask)], addr, index, hitway);
+    }*/
+
   return block->value[((addr>>(oshift))&bmask)];
 }
 
@@ -348,11 +383,18 @@ void tcache::write(i32 addr, i64 data){
 	next_level->touch(addr);
       }
       wbaddr =  ((block->tag)<<(ishift+bshift)) + (index<<bshift);
+      /*if (index == 224 && hitway == 7){
+	printf("Writing back %x in index(%u) and way (%u) to memory\n", wbaddr, index, hitway);
+	}*/
       this->writeback(block, wbaddr);
     }
     this->refill(block, addr);
   }
-  
+
+  /*if (addr == 4294941704){ // || (index == 224 && (hitway == 7))){
+    printf("%s Writing (%llx) to addr (%x) in index(%u) and way(%u)\n", name, data, addr, index, hitway);
+    }*/
+    
   block->value[((addr>>oshift)&bmask)] = data;
   block->dirty = 1;
   this->update_lru(&(sets[index]), hitway);
