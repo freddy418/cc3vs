@@ -41,9 +41,11 @@ void rgcache::annul(i32 addr){
   // TODO: implement me
   i32 hitway = nsets;
 
-  /*if (addr == 4294941704){
+#ifdef DBG
+  if (addr == DBG_ADDR){
     printf("Annuling %x in %s\n", addr, name);
-    }*/
+  }
+#endif
 
   for (i32 i=0;i<nsets;i++){
     if (lines[i].la <= addr && lines[i].ha >= addr && lines[i].valid == 1){
@@ -51,6 +53,7 @@ void rgcache::annul(i32 addr){
       printf("rgcache check for addr(%X), index(%d): low(%X) and high(%X) and valid(%d) matches\n", addr, i, lines[i].la, lines[i].ha, lines[i].valid);
 #endif
       hitway = i;
+      break;
     }
   }
 
@@ -96,7 +99,7 @@ void rgcache::annul(i32 addr){
   }
   // otherwise: do nothing (shouldn't be called)
   else{
-    //printf("Annul called and no action taken!\n");
+    printf("Annul called and no action taken!\n");
     fflush(stdout);
     assert(0);
   }
@@ -115,6 +118,7 @@ i32 rgcache::check(i32 addr){
 #endif
       hit = 1;
       hitway = i;
+      break;
     }
   }
 
@@ -131,8 +135,8 @@ void rgcache::allocate(i32 addr){
 
 i32 rgcache::write(i32 addr, i64 data){
   // writes always hit, but what about the bookkeeping updates?
-  i32 hit;
-
+  i32 hit;  
+    
 #ifdef LOG
     fprintf(tlog, "%s\n", name);
 #endif
@@ -232,7 +236,7 @@ i32 rgcache::write_cache(i32 low, i32 high, i64 data){
 	  if (lines[hitway].valid == 1 && lines[hitway].dirty == 1){
 	    writeback(hitway);
 	  }
-	  lines[i].la = high+dsize;	  
+	  lines[i].la = high+dsize;
 	  lines[hitway].la = low;
 	  lines[hitway].ha = high;
 	  lines[hitway].value = data;
@@ -251,7 +255,7 @@ i32 rgcache::write_cache(i32 low, i32 high, i64 data){
 	  if (lines[hitway].valid == 1 && lines[hitway].dirty == 1){
 	    writeback(hitway);
 	  }
-	  lines[i].ha = low-dsize;	  
+	  lines[i].ha = low-dsize;
 	  lines[hitway].la = low;
 	  lines[hitway].ha = high;
 	  lines[hitway].value = data;
@@ -290,7 +294,7 @@ i32 rgcache::write_cache(i32 low, i32 high, i64 data){
 	  lines[i].la = high;
 	  lines[i].value = data;
 	  lines[i].dirty = 1;
-	  //printf("split into low mid (new) and high\n");
+	  //printf("split into low mid (new) and high - THIS SHOULD NOT HAPPEN\n");
 	  /*if (low == 4294952612 || high == 4294952612){
 	    printf("spit into 3 ranges, low (%u truncated), mid (%u new), high (%u truncated)\n", i, hitway, hitway2);
 	    }*/
@@ -333,6 +337,7 @@ i64 rgcache::read(i32 addr){
     if (lines[i].la <= addr && lines[i].ha >= addr && lines[i].valid == 1){
       hit = 1;
       hitway = i;
+      break;
     }
   }
 
@@ -366,7 +371,6 @@ void rgcache::writeback(i32 index){
       /*if (i == 4294941704){
 	printf("Writing back (%llx) for addr (%x)\n", lines[index].value, i);
 	}*/
-
       next_level->write(i, lines[index].value);
       //mem->write(i, lines[index].value);
       size += 8;
@@ -379,16 +383,18 @@ void rgcache::writeback(i32 index){
     for (i32 i=lines[index].la;i<=lines[index].ha;i+=dsize){
 
       //printf("writing %llu to memory at %u\n", lines[index].value, i);
-
       mem->write(i, lines[index].value);
+      //printf("%s writing back addr(%x) and data(%llx)\n", name, i, lines[index].value);
       size += 8;
     }
     bwused += size;
   }
 
-  /*if (lines[index].la == 4294952612 || lines[index].ha == 4294952612 || index == 100){
+#ifdef DBG
+  if (lines[index].la == DBG_ADDR || lines[index].ha == DBG_ADDR || index == 100){
     printf("writing back index(%u) of (%u-%u)\n", index, lines[index].la, lines[index].ha);
-    }*/
+  }
+#endif
 
   lines[index].dirty = 0;
   totalwbs++;

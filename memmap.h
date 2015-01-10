@@ -34,7 +34,7 @@ typedef struct map_cache_struct {
 class mem_map {
   mm_cache* tlb; // L1 tlb
   mm_cache* tlb2; // L2 tlb - updated on eviction
-  map_entry * entries;
+  map_entry * mapents;
   
   i32 pshift;
   i32 bshift;

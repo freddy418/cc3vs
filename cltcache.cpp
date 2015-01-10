@@ -52,9 +52,11 @@ void cltcache::write(i32 addr, i64 data){
     uh = 0;
   }
 
-  if (addr == 2924259936){
+#ifdef DBG
+  if (addr == DBG_ADDR){
     printf("Writing %llx to addr(%x): ch(%u) and uh(%u)\n", data, addr, ch, uh);
   }
+#endif
 
   if (ch == 1 && uh ==1){
     printf("CL2(%u) and UL2(%u) must be mutually exclusive for addr(%u)!\n", ch, uh, addr);
@@ -62,25 +64,25 @@ void cltcache::write(i32 addr, i64 data){
   }
 
   if (data == 0){
-    /*if (addr == 4294941704){
+    /*if (addr == 4294954324){
       printf("Writing %llx to %x in cl2\n", data, addr);
       }*/
     hit = cl2->write(addr, data);
     if (uh == 1){
-      /*if (addr == 4294941704){
+      /*if (addr == 4294954324){
 	printf("Annuling %x in ul2\n", addr);
 	}*/
       ul2->annul(addr);
     }
   }else{
-    if (addr == 2923986208){
+    /*if (addr == 2923986208){
       printf("Writing %llx to %x in ul2\n", data, addr);
-    }
+      }*/
     hit = ul2->write(addr, data);
     if (ch == 1){
-      if (addr == 2923986208){
+      /*if (addr == 2923986208){
 	printf("Annuling %x in cl2\n", addr);
-      }
+	}*/
       cl2->annul(addr);
     }
   }
@@ -136,9 +138,11 @@ i64 cltcache::read(i32 addr){
   ch = cl2->check(addr);
   uh = ul2->check(addr);
 
-  if (addr == 2924259936){
+#ifdef DBG
+  if (addr == DBG_ADDR){
     printf("Read(%x) from ch(%u) and uh(%u)\n", addr, ch, uh);
   }
+#endif
 
   // handle 2 cases when either compressed or uncompressed hits
   if (ch == 1 && uh == 0){    
@@ -160,13 +164,17 @@ i64 cltcache::read(i32 addr){
     compressible = refill(addr);
     // retry the access
     if (compressible == 0){
-#ifdef DEBUG
-    printf("Refilled to value cache, calling value cache read\n");
+#ifdef DBG
+      if (addr == DBG_ADDR){
+	printf("Refilled to value cache, calling UL2 read\n");
+      }
 #endif
       value = ul2->read(addr);
     }else{
-#ifdef DEBUG
-    printf("Refilled to range cache, calling range cache read\n");
+#ifdef DBG
+      if (addr == DBG_ADDR){
+	printf("Refilled to range cache, calling CL2 read\n");
+      }
 #endif
       value = cl2->read(addr);
     }

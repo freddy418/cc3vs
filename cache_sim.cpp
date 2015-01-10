@@ -171,7 +171,9 @@ int main(int argc, char** argv){
       //printf("socket (%d, %d): %s\n", bytes, errno, buf);
       sscanf(buf, "%s %x %s", buf1, &addr, buf2);
       value = strtoull(buf2, NULL, 16);
-      addr = addr << OFFSET;
+
+      // BELOW is bad, we made a conscious decision to convert addresses internally using another offseting mechanism
+      //addr = addr << OFFSET;
       
       isRead = strncmp(buf1, "read", 4);
       if (mp != 0){
@@ -184,9 +186,11 @@ int main(int argc, char** argv){
       dl1->set_anum(lines);
       dl2->set_anum(lines);
 
-      if (addr == 2923986208){
+#ifdef DBG
+      if ((addr & (~((1 << 6)-1))) == (DBG_ADDR & (~((1 << 6)-1)))){
 	printf("CACHESIM: %s, addr: %X, value: %llX, zero: %d\n", buf1, addr, value, zero);
       }
+#endif
 
       if (isRead == 0){
 	// check the map first
@@ -222,9 +226,10 @@ int main(int argc, char** argv){
 	}
       }else{
 	if (zero == 0 && mp != 0){
-	  mp->update_block(addr, 1);
 	  //printf("Calling cache_allocate for %X\n", addr);
 	  dl1->allocate(addr); // special function to allocate a cache line with all zero
+	  mp->update_block(addr, 1);
+	  // new for 1/9/15 - update MUST come after allocate, which can trigger a writeback and another update_block
 	}
 	dl1->write(addr, value);
       }

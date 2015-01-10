@@ -85,31 +85,37 @@ void tcache::writeback(cache_block* bp, i32 addr){
 	break;
       }
     }
-    if (zero == 0){ // all zeros
+    //if (zero == 0){ // all zeros
       // only call this if map is enabled - how?
-      ret = map->update_block(addr, 0);
-    }
+      ret = map->update_block((addr&amask), zero);
+      //}
   }
 
-  /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
-    printf("%s Writing back (%x) zero(%u) mem(%u) map(%u) ret(%u) ", name, addr, zero, mem, map, ret);
-    }*/
+#ifdef DBG
+  if ((addr & amask) <= DBG_ADDR && (addr & amask) + (bvals<<oshift) > DBG_ADDR){
+    printf("%s Writing back (%x) zero(%u) mem(%u) map(%u) ret(%u): ", name, addr, zero, mem, map, ret);
+  }
+#endif
 
   if (mem != 0 && (zero == 1 || map == 0 || ret == 0)){
     for (i32 i=0;i<bvals;i++){
       //printf("writing %llu to mem at %u\n", bp->value[i], (addr & amask) + (i<<oshift));
-      /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
-	printf("%llx,", bp->value[i]);
-	}*/
+#ifdef DBG
+      if ((addr & amask) <= DBG_ADDR && (addr & amask) + (bvals<<oshift) > DBG_ADDR){
+      printf("%llx,", bp->value[i]);
+    }
+#endif
 
       mem->write((addr & amask) + (i<<oshift), bp->value[i]);
     }
     bwused += bsize;
   }
 
-  /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
-    printf("\n");
-    }*/
+#ifdef DBG
+  if ((addr & amask) <= DBG_ADDR && (addr & amask) + (bvals<<oshift) > DBG_ADDR){
+  printf("\n");
+}
+#endif
 
   //bwused += bsize;
   bp->dirty = 0;
@@ -120,9 +126,11 @@ void tcache::allocate(i32 addr){
   i32 tag, index, hit, hitway, wbaddr;
   cache_block* bp;
 
-  if ((addr & amask) <= 4294941704 && (addr & amask) + bvals > 4294941704){
-    printf("%s allocating line for (%x)\n", name, addr);
+#ifdef DBG
+  if ((addr & amask) <= DBG_ADDR && (addr & amask) + (bvals<<oshift) > DBG_ADDR){    
+    printf("%s allocating line for addr(%x)\n", name, addr);
   }
+#endif
 
   index = (addr >> bshift) & imask;
   tag = (addr >> (bshift + ishift));
@@ -195,9 +203,9 @@ void tcache::copy(i32 addr, cache_block* op){
   i32 tag, index, hitway, wbaddr, hit;
   cache_block* bp;
 
-  if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
+  /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
     printf("%s copying to (%x)\n", name, addr);
-  }
+    }*/
 
   index = (addr >> bshift) & imask;
   tag = (addr >> (bshift + ishift));
@@ -271,9 +279,11 @@ void tcache::refill(cache_block* bp, i32 addr){
     //exit(1);
     for (i=0;i<bvals;i++){
       bp->value[i] = mem->read((addr & amask) + (i<<oshift));
-      /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
-	printf("%llx,", bp->value[i]);
-	}*/
+#ifdef DBG
+      if ((addr & amask) + (i<<oshift) == DBG_ADDR){
+	printf("%s Reading (%x) from memory: %llx\n", name, (addr & amask) + (i<<oshift), bp->value[i]);
+      }
+#endif
     }
     bwused += bsize;
   }
@@ -339,9 +349,11 @@ i64 tcache::read(i32 addr){
 
   //printf("bsize(%u), sets(%u) - Access: read, addr(%X), index(%X), tag(%X), block(%X)\n", bsize, nsets, addr, index, tag, ((addr>>(oshift))&bmask));
 
-  /*if (addr == 4294941704){
-    printf("%s Reading (%llx) from addr (%x) in index(%u) and way(%u)\n", name, block->value[((addr>>(oshift))&bmask)], addr, index, hitway);
-    }*/
+#ifdef DBG
+  if (addr == DBG_ADDR){
+    printf("%s %s Reading (%llx) from addr (%x) in index(%u) and way(%u)\n", name, hit==1?"hit":"miss",block->value[((addr>>(oshift))&bmask)], addr, index, hitway);
+    }
+#endif
 
   return block->value[((addr>>(oshift))&bmask)];
 }
@@ -391,9 +403,11 @@ void tcache::write(i32 addr, i64 data){
     this->refill(block, addr);
   }
 
-  /*if (addr == 4294941704){ // || (index == 224 && (hitway == 7))){
+#ifdef DBG
+  if (addr == DBG_ADDR){
     printf("%s Writing (%llx) to addr (%x) in index(%u) and way(%u)\n", name, data, addr, index, hitway);
-    }*/
+  }
+#endif
     
   block->value[((addr>>oshift)&bmask)] = data;
   block->dirty = 1;

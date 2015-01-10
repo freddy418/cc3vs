@@ -80,9 +80,11 @@ void ccache::annul(i32 addr){
   i32 hitway = 0;
   cache_block* bp;
 
-  /*if (addr == 2928741272){
+#ifdef DBG
+  if (addr == DBG_ADDR){
     printf("Annuling %x in %s\n", addr, name);
-    }*/
+  }
+#endif
 
   // check tags
   for(i32 i=0;i<assoc;i++){
@@ -101,8 +103,10 @@ void ccache::writeback(cache_block* bp, i32 addr){
 
   // L1 cache
   if (next_level != 0){
-#ifdef DEBUG
-    printf("Writing back (writing) addr(%X) to next_level\n");
+#ifdef DBG
+    if (addr == DBG_ADDR){
+      printf("%s writing back addr(%x) and data(%llx)\n", name, addr, bp->value[0]);
+    }
 #endif
     next_level->write(addr, bp->value[0]);
     bwused += bsize;

@@ -1,20 +1,27 @@
 #include "memmap.h"
 
-mem_map::mem_map(i32 enable, i32 ps, i32 bs, i32 cs, i32 ofs){
+mem_map::mem_map(i32 en, i32 ps, i32 bs, i32 cs, i32 ofs){
+  // enable - 0-off, 1-on
+  // ps - page size in bytes
+  // bs - cache block size in bytes
+  // cs - cache size in entries
+  // ofs - data offset w.r.t to tags (e.g. ofs=1 is tage 2x the size of data)
   // create the memory map;
+  enabled = en;
   pshift = log2(ps) - ofs;
   bshift = log2(bs) - ofs;
   bsize = bs;
   psize = ps;
-  bmask = (ps / bs) - 1;
+  bmask = (ps/bs) - 1;
   bwused = 0;
   nents = (1 << (22+ofs)) / (ps >> 10);
-  assert(pow2(nents));
-  entries = new map_entry[nents];
+  //assert(pow2(nents));
+  mapents = new map_entry[nents];
   for (i32 i=0;i<nents;i++){
-    entries[i].zero = 0LL; // entry is zero
+    mapents[i].zero = 0ULL; // entry is zero
   }
-  enabled = enable;
+
+  printf("MEMMAP: pshift=%u, bshift=%u, bmask=%x\n", pshift, bshift, bmask);
 
   // create the l1 map tlb
   tlb = new mm_cache();
@@ -48,7 +55,7 @@ mem_map::mem_map(i32 enable, i32 ps, i32 bs, i32 cs, i32 ofs){
   tlb2->hits = 0;
   tlb2->misses = 0;
   tlb2->zeros = 0;
-  tlb2->entries = new tlb_entry[tlb2->nents];
+  tlb2->entries = new tlb_entry[cs << 2];
   for (i32 i=0;i<tlb2->nents;i++){
     tlb2->entries[i].entry = 0;
     tlb2->entries[i].valid = 0;
@@ -90,7 +97,7 @@ i32 mem_map::lookup(i32 addr){
   }else{
     tlb->misses++;
     hitway = tlb->lru->val;
-    tlb->entries[hitway].entry = lookup2(addr); //&(entries[tag]);
+    tlb->entries[hitway].entry = lookup2(addr); //&(mapents[tag]);
     tlb->entries[hitway].tag = tag;
     tlb->entries[hitway].valid = 1;
   }
@@ -109,9 +116,11 @@ i32 mem_map::lookup(i32 addr){
     tlb->zeros++;
   }
 
-  if (addr == 2923986208 || tag == 1427727){
+#ifdef DBG
+  if (addr == DBG_ADDR && tag == 713650){
     printf("Lookup proceeding for address(%x) tag(%d) in map (%llx) returning %d\n", addr, tag, tlb->entries[hitway].entry->zero, zero);
   }
+#endif
 
   return zero;
 }
@@ -136,7 +145,7 @@ map_entry* mem_map::lookup2(i32 addr){
   }else{
     tlb2->misses++;
     hitway = tlb2->lru->val;
-    tlb2->entries[hitway].entry = &(entries[tag]);
+    tlb2->entries[hitway].entry = &(mapents[tag]);
     tlb2->entries[hitway].tag = tag;
     tlb2->entries[hitway].valid = 1;
     bwused += 8 + (enabled << 2);
@@ -144,9 +153,11 @@ map_entry* mem_map::lookup2(i32 addr){
   update_lru(tlb2, hitway);
   tlb2->accs++;
 
-  if (addr == 2923986208){
+#ifdef DBG
+  if (addr == DBG_ADDR){
     printf("Lookup2 proceeding for address(%x) tag(%d) in map (%llx)\n", addr, tag, tlb2->entries[hitway].entry->zero);
   }
+#endif
 
   //printf("Map lookup for addr: %X, hitway: %u, block: %u, bv: %X, result: %u\n", addr,  hitway, block, tlb->entries[hitway]->zero, ((tlb->entries[hitway]->zero >> block) & 1));
   //printf("bshift: %u, bmask: %x\n", bshift, bmask);
@@ -184,26 +195,28 @@ i32 mem_map::update_block(i32 addr, i32 zero){
   }else{
     tlb->misses++;
     hitway = tlb->lru->val;
-    tlb->entries[hitway].entry = &(entries[tag]);
-    if (tlb->entries[hitway].dirty == 0){
-      bwused += 8 + (enabled << 2);
-    }else{
+    if (tlb->entries[hitway].dirty == 1){
       bwused += 8 + (enabled << 3);
       tlb->entries[hitway].dirty = 0;
     }
+    tlb->entries[hitway].entry = lookup2(addr); //&(mapents[tag]);
+    tlb->entries[hitway].tag = tag;
+    tlb->entries[hitway].valid = 1;
   }
   update_lru(tlb, hitway);
-  before = entries[tag].zero;
+  before = mapents[tag].zero;
 
   if (zero == 1){ // update memory and tlb2 to avoid writeback
-    entries[tag].zero |= (1LL << block);
+    mapents[tag].zero |= (1LL << block);
   }else{
-    entries[tag].zero &= (~(1LL << block));
+    mapents[tag].zero &= (~(1LL << block));
   }
 
-  if (addr == 2923986208 || tag == 1427727){
-    printf("update_block proceeding for address(%x) tag(%d) in map before(%llx) after(%llx)\n", addr, tag, before, entries[tag].zero);
-  }
+#ifdef DBG
+  if (addr == DBG_ADDR || tag == 713650){
+    printf("Update_block(%u) proceeding for address(%x) tag(%d) in map before(%llx) after(%llx)\n", zero, addr, tag, before, mapents[tag].zero);
+    }
+#endif
 
   tlb->entries[hitway].dirty = 1;
   tlb->accs++;
