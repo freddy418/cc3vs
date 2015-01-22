@@ -21,7 +21,7 @@ mem_map::mem_map(i32 en, i32 ps, i32 bs, i32 cs, i32 ofs){
     mapents[i].zero = 0ULL; // entry is zero
   }
 
-  printf("MEMMAP: pshift=%u, bshift=%u, bmask=%x\n", pshift, bshift, bmask);
+  //printf("MEMMAP: pshift=%u, bshift=%u, bmask=%x\n", pshift, bshift, bmask);
 
   // create the l1 map tlb
   tlb = new mm_cache();
@@ -108,6 +108,7 @@ i32 mem_map::lookup(i32 addr){
   //printf("bshift: %u, bmask: %x\n", bshift, bmask);
 
   if (enabled == 0){
+    // just model the TLB lookup
     return 1;
   }
 
@@ -117,7 +118,7 @@ i32 mem_map::lookup(i32 addr){
   }
 
 #ifdef DBG
-  if (addr == DBG_ADDR && tag == 713650){
+  if (addr == DBG_ADDR){
     printf("Lookup proceeding for address(%x) tag(%d) in map (%llx) returning %d\n", addr, tag, tlb->entries[hitway].entry->zero, zero);
   }
 #endif
@@ -213,7 +214,7 @@ i32 mem_map::update_block(i32 addr, i32 zero){
   }
 
 #ifdef DBG
-  if (addr == DBG_ADDR || tag == 713650){
+  if (addr>>bshift == DBG_ADDR>>bshift){
     printf("Update_block(%u) proceeding for address(%x) tag(%d) in map before(%llx) after(%llx)\n", zero, addr, tag, before, mapents[tag].zero);
     }
 #endif
@@ -289,4 +290,8 @@ void mem_map::clearstats(){
   tlb->accs = 0;
   tlb->hits = 0;
   tlb->misses = 0;
+}
+
+i32 mem_map::get_enabled(){
+  return enabled;
 }

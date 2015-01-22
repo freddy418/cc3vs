@@ -5,6 +5,7 @@ tcache::tcache(i32 ns, i32 as, i32 bs, i32 ofs){
   sets = new cache_set[ns];
   mem = 0;
   map = 0;
+  next_level = 0;
   nsets = ns;
   bsize = bs;
   bvals = bs >> 3;
@@ -17,8 +18,6 @@ tcache::tcache(i32 ns, i32 as, i32 bs, i32 ofs){
   bshift = log2(bs) - ofs;
   amask = -1 << bshift;
 
-  // initialize pointer to L2 as zero
-  next_level = 0;
   /* initialize statisitic counters */
   accs = 0;
   hits = 0;
@@ -68,7 +67,6 @@ void tcache::clearstats(){
 }
 
 void tcache::writeback(cache_block* bp, i32 addr){
-  i32 ret = 0;
   i32 zero = 0;
 
   // L1 cache
@@ -85,27 +83,22 @@ void tcache::writeback(cache_block* bp, i32 addr){
 	break;
       }
     }
-    //if (zero == 0){ // all zeros
-      // only call this if map is enabled - how?
-      ret = map->update_block((addr&amask), zero);
-      //}
+    map->update_block(addr, zero);
   }
 
 #ifdef DBG
   if ((addr & amask) <= DBG_ADDR && (addr & amask) + (bvals<<oshift) > DBG_ADDR){
-    printf("%s Writing back (%x) zero(%u) mem(%u) map(%u) ret(%u): ", name, addr, zero, mem, map, ret);
+    printf("%s Writing back (%x) zero(%u): ", name, addr);
   }
 #endif
 
-  if (mem != 0 && (zero == 1 || map == 0 || ret == 0)){
+  if (mem != 0 && (zero == 1 || map == 0 || map->get_enabled() == 0)){
     for (i32 i=0;i<bvals;i++){
-      //printf("writing %llu to mem at %u\n", bp->value[i], (addr & amask) + (i<<oshift));
 #ifdef DBG
       if ((addr & amask) <= DBG_ADDR && (addr & amask) + (bvals<<oshift) > DBG_ADDR){
-      printf("%llx,", bp->value[i]);
-    }
+         printf("%llx,", bp->value[i]);
+      }
 #endif
-
       mem->write((addr & amask) + (i<<oshift), bp->value[i]);
     }
     bwused += bsize;
@@ -117,7 +110,6 @@ void tcache::writeback(cache_block* bp, i32 addr){
 }
 #endif
 
-  //bwused += bsize;
   bp->dirty = 0;
   writebacks++;
 }
@@ -191,6 +183,7 @@ void tcache::touch(i32 addr){
     if ((bp->tag == tag) && (bp->valid == 1)){
       hit = 1;
       hitway = i;
+      break;
     }
   }
 
@@ -203,10 +196,6 @@ void tcache::copy(i32 addr, cache_block* op){
   i32 tag, index, hitway, wbaddr, hit;
   cache_block* bp;
 
-  /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
-    printf("%s copying to (%x)\n", name, addr);
-    }*/
-
   index = (addr >> bshift) & imask;
   tag = (addr >> (bshift + ishift));
   hitway = sets[index].lru->val;
@@ -216,6 +205,7 @@ void tcache::copy(i32 addr, cache_block* op){
     if ((bp->tag == tag) && (bp->valid == 1)){
       hit = 1;
       hitway = i;
+      break;
     }
   }
   bp = &(sets[index].blks[hitway]);
@@ -247,12 +237,9 @@ void tcache::copy(i32 addr, cache_block* op){
 
 void tcache::refill(cache_block* bp, i32 addr){
   i32 i, index, tag;
+  i32 zero = 1;
   tag = (addr >> (bshift + ishift)); 
   index = (addr >> bshift) & imask;
-  
-  /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
-    printf("%s refilling to (%x) ", name, addr);
-    }*/
 
   bp->tag = tag;
   bp->valid = 1;
@@ -265,32 +252,42 @@ void tcache::refill(cache_block* bp, i32 addr){
     }
   }
 
+  // update maps on eviction
+  if (map != 0){
+    zero = map->lookup(addr);
+  }
+
   if (next_level != 0){
     for (i32 i=0;i<bvals;i++){
       bp->value[i] = next_level->read((addr & amask) + (i<<oshift));
     }
-    //next_level->set_accs(next_level->get_accs() - (bvals-1));
-    //next_level->set_hits(next_level->get_hits() - (bvals-1));
-    //next_level->subaccs(addr, bvals-1);    
     bwused += bsize;
   }
   else if (mem != 0){
     //printf("sets(%u), bsize(%u) - Refill from memory - addr(%08X), index(%u), tag(%X)\n", nsets, bsize, addr, index, tag);
-    //exit(1);
-    for (i=0;i<bvals;i++){
-      bp->value[i] = mem->read((addr & amask) + (i<<oshift));
+    if (zero == 1){    
+      for (i=0;i<bvals;i++){
+	bp->value[i] = mem->read((addr & amask) + (i<<oshift));
 #ifdef DBG
-      if ((addr & amask) + (i<<oshift) == DBG_ADDR){
-	printf("%s Reading (%x) from memory: %llx\n", name, (addr & amask) + (i<<oshift), bp->value[i]);
-      }
+	if ((addr & amask) + (i<<oshift) == DBG_ADDR){
+	  printf("%s Reading (%x) from memory: %llx\n", name, (addr & amask) + (i<<oshift), bp->value[i]);
+	}
 #endif
+      }
+      bwused += bsize;
+    }else{
+      for (i=0;i<bvals;i++){
+        bp->value[i] = 0;
+	// does this line have to be marked dirty now?
+#ifdef DBG
+	if ((addr & amask) + (i<<oshift) == DBG_ADDR){
+	  printf("%s Reading %llx from memory at addr (%u)\n", name, 0ULL, (addr & amask) + (i<<oshift));
+	}
+#endif
+      }
     }
-    bwused += bsize;
   }
   //printf("block size: %d, index: %d, addr: %X, bmask: %X\n", (bsize), (addr>>bshift)&(bmask), addr, bmask);
-  /*if ((addr & amask) <= 4294941704 && (addr & amask) + (bvals<<oshift) > 4294941704){
-    printf("\n");
-    }*/
 }
 
 i64 tcache::read(i32 addr){
@@ -347,8 +344,6 @@ i64 tcache::read(i32 addr){
   this->update_lru(&(sets[index]), hitway);
   accs++;
 
-  //printf("bsize(%u), sets(%u) - Access: read, addr(%X), index(%X), tag(%X), block(%X)\n", bsize, nsets, addr, index, tag, ((addr>>(oshift))&bmask));
-
 #ifdef DBG
   if (addr == DBG_ADDR){
     printf("%s %s Reading (%llx) from addr (%x) in index(%u) and way(%u)\n", name, hit==1?"hit":"miss",block->value[((addr>>(oshift))&bmask)], addr, index, hitway);
@@ -373,6 +368,7 @@ void tcache::write(i32 addr, i64 data){
     if ((sets[index].blks[i].tag == tag) && (sets[index].blks[i].valid == 1)){
       hit = 1;
       hitway = i;
+      break;
     }
   }
 
@@ -390,14 +386,7 @@ void tcache::write(i32 addr, i64 data){
     block = &(sets[index].blks[hitway]);
     //printf("miss to index: %d on tag: %x, replaced %d\n", index, tag, hitway);
     if (block->valid == 1 && block->dirty == 1){
-      // lock line in next level
-      if (next_level != 0){
-	next_level->touch(addr);
-      }
       wbaddr =  ((block->tag)<<(ishift+bshift)) + (index<<bshift);
-      /*if (index == 224 && hitway == 7){
-	printf("Writing back %x in index(%u) and way (%u) to memory\n", wbaddr, index, hitway);
-	}*/
       this->writeback(block, wbaddr);
     }
     this->refill(block, addr);
@@ -422,7 +411,7 @@ void tcache::stats(){
   printf("%s map = %X\n", name, map);
   printf("miss rate: %1.8f\n", (((double)misses)/(accs)));
   printf("%llu accesses, %llu hits, %llu misses, %llu writebacks, %llu allocs\n", accs, hits, misses, writebacks, allocs);
-  printf("bandwidth used: %lu KB\n", (bwused >> 10));
+  printf("bandwidth used: %llu KB\n", (bwused >> 10));
  
 #ifdef LINETRACK 
   for (i32 i=0;i<nsets;i++){
@@ -430,7 +419,6 @@ void tcache::stats(){
   }
 #endif
 }
-
 
 void tcache::update_lru(cache_set * set, unsigned int hitway){
   item * hitnode;

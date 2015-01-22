@@ -56,6 +56,7 @@ class mem_map {
   void stats();
   void clearstats();
   mm_cache* get_tlb();
+  i32 get_enabled();
 };
 
 #endif /* MEMMAP_H */

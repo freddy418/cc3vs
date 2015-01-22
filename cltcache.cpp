@@ -109,12 +109,12 @@ i32 cltcache::refill(i32 addr){
     bwused += 8;
   }
   else{
-    level = 0;
-    data = 0;
+    printf("%s Refill failed mem(%x) next_level(%x)\n", name, mem, next_level);
+    assert(0);
   }
     
 #ifdef DEBUG
-  printf("Refilling from next_level for address %X, read %8llX, level %d\n", addr, data, level);
+  printf("%s Refilling from next_level for address %X, read %8llX, level %d\n", name, addr, data, level);
     fflush(stdout);
 #endif
   // send to cl2 or ul2 based on compressibility

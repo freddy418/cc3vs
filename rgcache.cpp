@@ -40,6 +40,7 @@ rgcache::rgcache(i32 ns, i32 ofs){
 void rgcache::annul(i32 addr){
   // TODO: implement me
   i32 hitway = nsets;
+  i32 tmp;
 
 #ifdef DBG
   if (addr == DBG_ADDR){
@@ -49,8 +50,10 @@ void rgcache::annul(i32 addr){
 
   for (i32 i=0;i<nsets;i++){
     if (lines[i].la <= addr && lines[i].ha >= addr && lines[i].valid == 1){
-#ifdef DEBUG
-      printf("rgcache check for addr(%X), index(%d): low(%X) and high(%X) and valid(%d) matches\n", addr, i, lines[i].la, lines[i].ha, lines[i].valid);
+#ifdef DBG
+      if (lines[i].la <= DBG_ADDR && lines[i].ha >= DBG_ADDR){
+	printf("%s annul check(%u) for addr(%x), index(%u): low(%x) and high(%x) and valid(%u) matches\n", name, totalaccs, addr, i, lines[i].la, lines[i].ha, lines[i].valid);
+      }
 #endif
       hitway = i;
       break;
@@ -76,26 +79,35 @@ void rgcache::annul(i32 addr){
     /*if (addr == 4294952612){
       printf("Annul(%u): increment low end of range(%u-%u) to", addr, lines[hitway].la, lines[hitway].ha);
       }*/
-    lines[hitway].la += dsize;
-    /*if (addr == 4294952612){
-      printf(" range(%u-%u)\n", lines[hitway].la, lines[hitway].ha);
-      }*/
+    if (lines[hitway].la == lines[hitway].ha){
+      lines[hitway].valid = 0;
+      lines[hitway].dirty = 0;
+    }else{      
+      lines[hitway].la += dsize;
+    }
   }
   // case c: decrement high end of existing range     
   else if (lines[hitway].ha == addr && lines[hitway].valid == 1){
     /*if (addr == 4294952612){
       printf("Annul(%u): decrement high end of range(%u-%u)\n", addr, lines[hitway].la, lines[hitway].ha);
       }*/
-    lines[hitway].ha -= dsize;
+    if (lines[hitway].la == lines[hitway].ha){
+      lines[hitway].valid = 0;
+      lines[hitway].dirty = 0;
+    }else{      
+      lines[hitway].ha -= dsize;
+    }
   }
   // case d: split range into two ranges
   else if ((lines[hitway].la < addr) && (addr < lines[hitway].ha) && (lines[hitway].valid == 1)){
-    /*if (addr == 4294952612){
-      printf("Annul(%u): splitting range %u(%u-%u) into 2 ranges: (%u-%u), (%u-%u)\n", addr, hitway, lines[hitway].la, lines[hitway].ha, lines[hitway].la, (addr-dsize), (addr+dsize), lines[hitway].ha);
-      }*/
-    write_cache(addr+dsize, lines[hitway].ha, lines[hitway].value);
+#ifdef DBG
+    if (lines[hitway].la <= DBG_ADDR && lines[hitway].ha >= DBG_ADDR){
+      printf("%s Annul(%u) for addr %x: splitting range %u(%x-%x) into 2 ranges: (%x-%x), (%x-%x)\n", name, totalaccs, addr, hitway, lines[hitway].la, lines[hitway].ha, lines[hitway].la, (addr-dsize), (addr+dsize), lines[hitway].ha);
+    }
+#endif
+    tmp = lines[hitway].ha;
     lines[hitway].ha = (addr-dsize);
-    update_lru(hitway);
+    write_cache(addr+dsize, tmp, lines[hitway].value);
   }
   // otherwise: do nothing (shouldn't be called)
   else{
@@ -118,13 +130,14 @@ i32 rgcache::check(i32 addr){
 #endif
       hit = 1;
       hitway = i;
-      break;
+      //break;
     }
+#ifdef DBG
+    if (addr == DBG_ADDR){
+      printf("Check(%x): %s on entry(%u) with range(%x-%x)\n", addr, hit==1?"hit":"miss", i, lines[i].la, lines[i].ha);
+    }
+#endif
   }
-
-  /*if (addr == 4294952612 && hit == 1){
-    printf("Check(%u): hit on entry(%u) with range(%u-%u)\n", addr, hitway, lines[hitway].la, lines[hitway].ha);
-    }*/
 
   return hit;
 }
@@ -138,137 +151,191 @@ i32 rgcache::write(i32 addr, i64 data){
   i32 hit;  
     
 #ifdef LOG
-    fprintf(tlog, "%s\n", name);
+  fprintf(tlog, "%s\n", name);
 #endif
-  hit = write_cache(addr, addr, data);
+  hit = 1; 
+  write_cache(addr, addr, data);
 
-  accs++;
-  if (hit == 1){
+  //accs++;
+  /*if (hit == 1){
     hits++; // always hits... (make a new range)
   }else{
     misses++;
-  }
+    }*/
 
   return hit;
 }
 
-i32 rgcache::write_cache(i32 low, i32 high, i64 data){
-  i32 hit, hitway, hitway2;
+void rgcache::write_cache(i32 low, i32 high, i64 data){
+  i32 hitway, hitway2;
 
-  /*if (low == 4294952612 || high == 4294952612){
-    printf("CH Write(%u-%u) called ", low, high);
-    }*/
-  
   // principle learned: merge/extend ranges as much as possible, create new range as a last resort
-  //printf("writing %llu to %u-%u: ", data, low, high);
-
-  // case b - start and end in 2 separate address ranges, create new aggregated range
+  // case b - start and end in 2 separate address ranges, merge and create new aggregated range
   for (i32 i=0;i<nsets;i++){
     for (i32 j=0;j<nsets;j++){
-      if ((lines[i].ha)+dsize==low && (lines[j].la)-dsize==high && lines[i].valid==1 && lines[j].valid==1 && (lines[i].value == lines[j].value) && (lines[i].value == data)){
-	//printf("combining lines %u(%u-%u) and %u(%u-%u) to new range\n", i, lines[i].la, lines[i].ha, j, lines[j].la, lines[j].ha);
-	/*if (low == 4294952612 || high == 4294952612 || i == 100 || j == 100){
-	  printf("Writing (%u-%u) - aggregating 2 separate ranges %u(%u-%u) %u(%u-%u) to %u(%u-%u)\n", low, high, i, lines[i].la, lines[i].ha, j, lines[j].la, lines[j].ha, i, lines[i].la, lines[j].ha);
-	  }*/
+      if ((lines[i].ha)+dsize==low && (lines[j].la)-dsize==high && lines[i].valid==1 && lines[j].valid==1 && (lines[i].value == lines[j].value) && (lines[i].value == data) && i!=j){
+#ifdef DBG
+	if (low == DBG_ADDR || high == DBG_ADDR || (totalaccs > DBG_ACCS && lines[i].la <= DBG_ADDR && lines[i].ha >= DBG_ADDR && lines[j].la <= DBG_ADDR && lines[j].ha >= DBG_ADDR)){
+	  printf("Combining lines %u(%x-%x) and %u(%x-%x) to new range at %u(%x-%x) of %llx\n", i, lines[i].la, lines[i].ha, j, lines[j].la, lines[j].ha, i, lines[i].la, lines[j].ha, lines[i].value);
+	}
+#endif
 	lines[i].ha = lines[j].ha;
 	lines[i].dirty = 1;
 	lines[j].valid = 0;
 	lines[j].dirty = 0;
 	update_lru(i);
-	// somehow make lines[j] available replacement next
-	return 1;
+	// need to annul any other indexes with this range set
+	for (i32 k=0;k<nsets;k++){
+	  if (k == j || k == i){
+	    continue;
+      }else if (lines[k].la <= low && lines[k].ha >= high){
+	// this is not a complete solution, relies on assumption line k only caches 1 value, what about the rest?
+	    lines[k].valid = 0;
+	    lines[k].dirty = 0;
+          }
+        }
+	return;
+      }
+      // lies within another range with a different value, which is absorbed after the write
+      else if (lines[i].valid == 1 && lines[j].valid==1 && lines[j].value==data && high+dsize >= lines[j].la && high+dsize <= lines[j].ha && low >= lines[i].la && low <= lines[i].ha && i!=j){
+#ifdef DBG
+	if (low == DBG_ADDR || high == DBG_ADDR || (totalaccs > DBG_ACCS && lines[i].la <= DBG_ADDR && lines[i].ha >= DBG_ADDR && lines[j].la <= DBG_ADDR && lines[j].ha >= DBG_ADDR)){
+	printf("Write of %llx (%x, %x) Partially absorbing line %u(%x-%x) of %llx and extending %u(%x-%x) of %llx\n", data, low, high, i, lines[i].la, lines[i].ha, lines[i].value, j, lines[j].la, lines[j].ha, lines[j].value);
+	}
+#endif
+	if (lines[i].la == low){ // absorbed after update
+	  lines[i].valid = 0;
+	  lines[i].dirty = 0;
+	  lines[i].value = 0;
+        }else{
+	  lines[i].ha = low-dsize;
+        }
+	lines[j].la = low;
+	lines[j].dirty = 1;
+	update_lru(j);
+	return;
+      }
+      else if (lines[i].valid == 1 && lines[j].valid==1 && lines[j].value==data && low-dsize >= lines[j].la && low-dsize <= lines[j].ha && high >= lines[i].la && high <= lines[i].ha && i!=j){
+#ifdef DBG
+	if (low == DBG_ADDR || high == DBG_ADDR || (totalaccs > DBG_ACCS && lines[i].la <= DBG_ADDR && lines[i].ha >= DBG_ADDR && lines[j].la <= DBG_ADDR && lines[j].ha >= DBG_ADDR)){
+	  printf("Write of %llx (%x, %x) Partially absorbing line %u(%x-%x) of %llx and extending %u(%x-%x) of %llx\n", data, low, high, i, lines[i].la, lines[i].ha, lines[i].value, j, lines[j].la, lines[j].ha, lines[j].value);
+	}
+#endif
+	if (lines[i].ha == high){
+	  lines[i].valid = 0;
+	  lines[i].dirty = 0;
+	  lines[i].value = 0;
+        }else{
+	  lines[i].la = high+dsize;
+        }
+	lines[j].ha = high;
+	lines[j].dirty = 1;
+	update_lru(j);
+	return;
       }
     }
   }
 
   // case c - input range extends one of existing ranges in either direction
   for (i32 i=0;i<nsets;i++){
-    if (lines[i].la==high+dsize && lines[i].value==data && lines[i].valid==1){
-      //printf("extended line %u(%u, %u) to (%u, %u)\n", i, lines[i].la, lines[i].ha, low, lines[i].ha);
+    if (lines[i].la == high+dsize && lines[i].value == data && lines[i].valid==1){
+#ifdef DBG
+	if (low == DBG_ADDR || high == DBG_ADDR){
+	printf("Extending line %u(%x, %x) to (%x, %x)\n", i, lines[i].la, lines[i].ha, low, lines[i].ha);
+	}
+#endif
       lines[i].la = low;
       lines[i].dirty = 1;
       update_lru(i);
-      /*if (low == 4294952612 || high == 4294952612){
-	printf("extend low of %u\n", i);
-	}*/
-      return 1;
+      return;
     }
-    else if (lines[i].ha==low-dsize && lines[i].value==data && lines[i].valid==1){
-      //printf("extended line %u(%u, %u) to (%u, %u)\n", i, lines[i].la, lines[i].ha, lines[i].la, high);
+    else if (lines[i].ha == low-dsize && lines[i].value == data && lines[i].valid==1){
+#ifdef DBG
+      if (low == DBG_ADDR || high == DBG_ADDR){
+      printf("Extending line %u(%x, %x) to (%x, %x)\n", i, lines[i].la, lines[i].ha, lines[i].la, high);
+    }
+#endif
       lines[i].ha = high;
       lines[i].dirty = 1;
       update_lru(i);
-      /*if (low == 4294952612 || high == 4294952612){
-	printf("extend high of %u\n", i);
-	}*/
-      return 1;
+      return;
     }
   }
 
   // case a - new range lies within existing range
   for (i32 i=0;i<nsets;i++){
-    if ((lines[i].la<=low) && (lines[i].ha>=high) && (lines[i].valid==1)){
+    if ((lines[i].la <= low) && (lines[i].ha >= high) && lines[i].valid==1){
       //printf("withing existing range, ");
       if (data == lines[i].value){
+#ifdef DBG
+	if (low == DBG_ADDR || high == DBG_ADDR){
+	  printf("Write(%u) of %llx to %x, same value in entry %u(%x, %x) of %llx, no update\n", totalaccs, data, low, i, lines[i].la, lines[i].ha, lines[i].value);
+	}
+#endif
 	// found it, don't do anything
 	lines[i].dirty = 1;
 	update_lru(i);
-	/*if (low == 4294952612 || high == 4294952612){
-	  printf("same value in existing range in %u\n", i);
-	  }*/
-	//printf("same value, no update\n");
-	return 1;
+	return;
       }else{
 	// replace value in chunk
 	if (lines[i].la == low && lines[i].ha == high){
+#ifdef DBG
+	  if (low == DBG_ADDR || high == DBG_ADDR || (totalaccs > DBG_ACCS && lines[i].la <= DBG_ADDR && lines[i].ha >= DBG_ADDR)){
+	    printf("New value of %llx, same range in %u(%x, %x) of %llx\n", data, i, lines[i].la, lines[i].ha, lines[i].value);
+	  }
+#endif
 	  lines[i].value = data;
 	  lines[i].dirty = 1;
-	  //printf("new value, same range\n");
 	  update_lru(i);
-	  /*if (low == 4294952612 || high == 4294952612){
-	    printf("new value in existing range of %u\n", i);
-	    }*/
-	  return 1;
+	  return;
 	}
 	else if (lines[i].la == low){
 	  // split into low (new) and high (truncated)
+#ifdef DBG
+	  if (low == DBG_ADDR || high == DBG_ADDR || (totalaccs > DBG_ACCS && lines[i].la <= DBG_ADDR && lines[i].ha >= DBG_ADDR)){
+	    printf("Write into %u (%x, %x) of %llx with (%x, %x) of %llx forcing split into 2 ranges\n", i, lines[i].la, lines[i].ha, lines[i].value, low, high, data);
+	  }
+#endif
 	  hitway = lru->val;
 	  if (lines[hitway].valid == 1 && lines[hitway].dirty == 1){
 	    writeback(hitway);
 	  }
-	  lines[i].la = high+dsize;
+	  lines[i].la = high+dsize;	  
 	  lines[hitway].la = low;
 	  lines[hitway].ha = high;
 	  lines[hitway].value = data;
 	  lines[hitway].dirty = 1;
 	  lines[hitway].valid = 1;
 	  update_lru(hitway);
-	  /*if (low == 4294952612 || high == 4294952612){
-	    printf("split into low (%u new) and high (%u truncated)\n", i, hitway);
-	    }*/
-	  //printf("split into low (new) and high\n");
-	  return 0;
+	  return;
 	}
 	else if (lines[i].ha == high){
 	  // split into low (truncated) and high (new)
+#ifdef DBG
+	  if (low == DBG_ADDR || high == DBG_ADDR || (totalaccs > DBG_ACCS && lines[i].la <= DBG_ADDR && lines[i].ha >= DBG_ADDR)){
+	    printf("Write into %u (%x, %x) of %llx with (%x, %x) of %llx forcing split into 2 ranges\n", i, lines[i].la, lines[i].ha, lines[i].value, low, high, data);
+	  }
+#endif
 	  hitway = lru->val;
 	  if (lines[hitway].valid == 1 && lines[hitway].dirty == 1){
 	    writeback(hitway);
 	  }
-	  lines[i].ha = low-dsize;
+	  lines[i].ha = low-dsize;	  
 	  lines[hitway].la = low;
 	  lines[hitway].ha = high;
 	  lines[hitway].value = data;
 	  lines[hitway].dirty = 1;
 	  lines[hitway].valid = 1;
 	  update_lru(hitway);
-	  /*if (low == 4294952612 || high == 4294952612){
-	    printf("split into low (%u truncated) and high (%u new)\n", i, hitway);
-	    }*/
-	  return 0;
+	  return;
 	}
 	else {
 	  // spit into 3 ranges, low (truncated), mid (new), high (truncated)
+#ifdef DBG
+	  if (low == DBG_ADDR || high == DBG_ADDR || (totalaccs > DBG_ACCS && lines[i].la <= DBG_ADDR && lines[i].ha >= DBG_ADDR)){
+	    printf("Write into %u(%x, %x) of %llx with (%x, %x) of %llx forcing split into 3 ranges\n", i, lines[i].la, lines[i].ha, lines[i].value, low, high, data);
+	  }
+#endif
 	  hitway = lru->val;
 	  if (lines[hitway].valid == 1 && lines[hitway].dirty == 1){
 	    writeback(hitway);
@@ -283,22 +350,21 @@ i32 rgcache::write_cache(i32 low, i32 high, i64 data){
 	  lines[hitway].la = lines[i].la;
 	  lines[hitway].ha = low-dsize;
 	  lines[hitway].value = lines[i].value;
+	  lines[hitway].dirty = lines[i].dirty;
 	  lines[hitway].valid = 1;
 	  // high->old_high is old data
 	  lines[hitway2].la = high+dsize;
 	  lines[hitway2].ha = lines[i].ha;
 	  lines[hitway2].value = lines[i].value;
+	  lines[hitway2].dirty = lines[i].dirty;
 	  lines[hitway2].valid = 1;
 	  // low->high is updated with data
 	  lines[i].ha = low;
 	  lines[i].la = high;
 	  lines[i].value = data;
 	  lines[i].dirty = 1;
-	  //printf("split into low mid (new) and high - THIS SHOULD NOT HAPPEN\n");
-	  /*if (low == 4294952612 || high == 4294952612){
-	    printf("spit into 3 ranges, low (%u truncated), mid (%u new), high (%u truncated)\n", i, hitway, hitway2);
-	    }*/
-	  return 0;
+	  update_lru(i);
+	  return;
 	}
       }
     }
@@ -315,11 +381,11 @@ i32 rgcache::write_cache(i32 low, i32 high, i64 data){
   lines[hitway].dirty = 1;
   lines[hitway].valid = 1;
   update_lru(hitway);
-  /*if (low == 4294952612 || high == 4294952612){
-    printf("creating new range at %u (%u, %u)\n", hitway, low, high);
-    printf("index(%u): %u-%u, valid(%u), dirty(%u)\n", 100, lines[100].la, lines[100].ha, lines[100].valid, lines[100].dirty);
-    }*/
-  return 0;
+#ifdef DBG
+  if (low == DBG_ADDR || high == DBG_ADDR){
+    printf("Creating new range at %u(%x, %x) with %llx\n", hitway, low, high, data);
+      }
+#endif
 }
 
 void rgcache::refill(i32 addr, i64 data){
@@ -348,6 +414,7 @@ i64 rgcache::read(i32 addr){
     fprintf(tlog, "%s\n", name);
 #endif
   }else{
+    printf("Read missed in RGCache\n");
     fflush(stdout);
     assert(0);
     misses++;
@@ -366,35 +433,26 @@ void rgcache::writeback(i32 index){
   if (next_level != 0){
     size = 0;
     for (i32 i=lines[index].la;i<=lines[index].ha;i+=dsize){
-
-      //printf("writing %llu to L2 at %u\n", lines[index].value, i);
-      /*if (i == 4294941704){
-	printf("Writing back (%llx) for addr (%x)\n", lines[index].value, i);
-	}*/
+#ifdef DBG
+      if (i == DBG_ADDR){
+	printf("Writing back (%llx) at %u(%x-%x) for addr (%x) to next_level\n", lines[index].value, index, lines[index].la, lines[index].ha, i);
+      }
+#endif
       next_level->write(i, lines[index].value);
       //mem->write(i, lines[index].value);
       size += 8;
     }
     bwused += size;    
   }
-
-  if (mem != 0){
+  else if (mem != 0){
     size = 0;
     for (i32 i=lines[index].la;i<=lines[index].ha;i+=dsize){
-
-      //printf("writing %llu to memory at %u\n", lines[index].value, i);
+      //printf("Writing %llu to memory at %u\n", lines[index].value, i);
       mem->write(i, lines[index].value);
-      //printf("%s writing back addr(%x) and data(%llx)\n", name, i, lines[index].value);
       size += 8;
     }
     bwused += size;
   }
-
-#ifdef DBG
-  if (lines[index].la == DBG_ADDR || lines[index].ha == DBG_ADDR || index == 100){
-    printf("writing back index(%u) of (%u-%u)\n", index, lines[index].la, lines[index].ha);
-  }
-#endif
 
   lines[index].dirty = 0;
   totalwbs++;
@@ -405,6 +463,7 @@ void rgcache::touch(i32 addr){
   for (i32 i=0;i<nsets;i++){
     if (lines[i].la <= addr && lines[i].ha >= addr){
       update_lru(i);
+      break;
     }
   }
 }

@@ -16,14 +16,13 @@
 
 using namespace std;
 
-#define OFFSET 1
-#define RANGE 1<<16
+#define RANGE 1<<28
+
+unsigned int totalaccs;
 
 #ifdef LOG
 FILE *tlog;
 #endif
-
-//#define TEST 1
 
 int bin2dec(char *bin)   
 {
@@ -51,16 +50,17 @@ int bin2dec(char *bin)
 }
 
 int main(int argc, char** argv){
-  if (argc != 9){
-    printf( "usage: %s (ranges) (blocks) (l2_assoc) (l2_sets) (bsize) (skip) (dir) benchmark\n", argv[0]);
-    exit(0);
+  if (argc != 11){
+    printf( "usage: %s (tagoffset) (mapon) (ranges) (blocks) (l2_assoc) (l2_sets) (bsize) (skip) (dir) benchmark\n", argv[0]);
+    exit(1);
   }
 
   // bookkeeping
-  unsigned int lines = 0;
+  totalaccs = 0;
   unsigned long mismatches = 0;
 
   // stack variables
+  unsigned int tagoffset, mapon;
   unsigned int ranges; // number of ranges in RL1
   unsigned int blocks; // number of blocks in VL1
   unsigned int l2sets, l2assoc; // uncompressed L2 parameters
@@ -69,18 +69,20 @@ int main(int argc, char** argv){
   unsigned long long sval;
   unsigned int skip;
 
-  ranges = atoi(argv[1]);
-  blocks = atoi(argv[2]);
-  l2assoc = atoi(argv[3]);
-  l2sets = atoi(argv[4]);
-  bsize = atoi(argv[5]);
-  skip = atoi(argv[6]) * 1000000;
+  tagoffset = atoi(argv[1]);
+  mapon = atoi(argv[2]);
+  ranges = atoi(argv[3]);
+  blocks = atoi(argv[4]);
+  l2assoc = atoi(argv[5]);
+  l2sets = atoi(argv[6]);
+  bsize = atoi(argv[7]);
+  skip = atoi(argv[8]) * 1000000;
 
   // initialize cache and local variables;
-  cltcache* dl1 = new cltcache(ranges, blocks, OFFSET);
-  tcache* dl2 = new tcache(l2sets, l2assoc, bsize, OFFSET);
-  mem_map* mp = new mem_map(1, 4096, bsize, 32, OFFSET); // added enable (0-off,1-on)
-  tmemory* sp = new tmemory(OFFSET);
+  cltcache* dl1 = new cltcache(ranges, blocks, tagoffset);
+  tcache* dl2 = new tcache(l2sets, l2assoc, bsize, tagoffset);
+  mem_map* mp = new mem_map(mapon, 4096, bsize, 32, tagoffset); // added enable (0-off,1-on)
+  tmemory* sp = new tmemory(tagoffset);
   FILE *in;
 
   dl1->set_nl(dl2);
@@ -116,6 +118,9 @@ int main(int argc, char** argv){
     }
     printf("Connected!!\n\n");*/
 
+  char *buf, *buf1, *buf2;
+  int bytes;
+
 #ifdef LOG
   char tf[512];
   //sprintf(tf, "%s/%s-taint.log", argv[6], argv[7]);
@@ -132,12 +137,12 @@ int main(int argc, char** argv){
   unsigned int fcnt = 0;
   DIR *dp;
   struct dirent *dirp;
-  if((dp  = opendir(argv[7])) == NULL) {
-    cout << "Error(" << errno << ") opening " << argv[7] << endl;
+  if((dp  = opendir(argv[9])) == NULL) {
+    cout << "Error (" << errno << ") unable to find directory " << argv[9] << endl;
     return errno;
   }
   while ((dirp = readdir(dp)) != NULL) {
-    if ((strstr(dirp->d_name, argv[8]) != NULL) && (strstr(dirp->d_name, "log") != NULL)){
+    if ((strstr(dirp->d_name, argv[10]) != NULL) && (strstr(dirp->d_name, "log") != NULL)){
       fcnt++;
     }
   }
@@ -147,12 +152,9 @@ int main(int argc, char** argv){
   // fcnt = 1;
 
   if (fcnt == 0){
-    fprintf(stderr, "No valid trace files of name %s found\n", argv[8]);
+    fprintf(stderr, "No valid trace files of name %s found\n", argv[10]);
     exit(1);
   }
-
-  char *buf, *buf1, *buf2;
-  int bytes;
 
   buf = new char[64];
   buf1 = new char[256];
@@ -160,7 +162,7 @@ int main(int argc, char** argv){
 
   for (unsigned int i = 0;i < fcnt;i++) {
     char file[512];
-    sprintf(file, "%s/%s%d.log", argv[7], argv[8], i);
+    sprintf(file, "%s/%s%d.log", argv[9], argv[10], i);
     in = fopen(file, "r");
     fprintf(stderr, "Reading from file %s\n", file);
     if (in == NULL){
@@ -171,75 +173,42 @@ int main(int argc, char** argv){
       //printf("socket (%d, %d): %s\n", bytes, errno, buf);
       sscanf(buf, "%s %x %s", buf1, &addr, buf2);
       value = strtoull(buf2, NULL, 16);
-
-      // BELOW is bad, we made a conscious decision to convert addresses internally using another offseting mechanism
-      //addr = addr << OFFSET;
       
       isRead = strncmp(buf1, "read", 4);
-      if (mp != 0){
+      /*if (mp != 0){
 	zero = mp->lookup(addr);
       }else{
 	zero = 1; // do the lookup
-      }
+	}*/
       //printf("result of lookup for address %08X in memmap: %d, is
       //read?: %d\n", addr, zero,       strncmp(buf1, "write", 5));
-      dl1->set_anum(lines);
-      dl2->set_anum(lines);
+      dl1->set_anum(totalaccs);
+      dl2->set_anum(totalaccs);
 
 #ifdef DBG
-      if ((addr & (~((1 << 6)-1))) == (DBG_ADDR & (~((1 << 6)-1)))){
-	printf("CACHESIM: %s, addr: %X, value: %llX, zero: %d\n", buf1, addr, value, zero);
+      if (addr == DBG_ADDR){
+	printf("CACHESIM(%u): %s, addr: %X, value: %llX, zero: %d\n", totalaccs, buf1, addr, value, zero);
       }
 #endif
 
       if (isRead == 0){
-	// check the map first
-	if (zero == 1){
-	  //printf("Performing the read\n");
-	  sval = dl1->read(addr);
-	}else{
-	  sval = 0;
-	}
+        sval = dl1->read(addr);
 	if (sval != value){
-	  /*if (zero == 0){
-	    if (mp != 0){
-	      mp->update_block(addr, 1);
-	    }
-	    dl1->allocate(addr);
-	    dl1->write(addr, value);
-	    dl1->set_accs(dl1->get_accs() - 1);
-	    dl1->set_hits(dl1->get_hits() - 1);
-	  }else{
-	    dl1->write(addr, value);
-	    dl1->set_accs(dl1->get_accs() - 1);
-	    dl1->set_hits(dl1->get_hits() - 1);	      
-	    //printf("
-	    mismatches++;
-	    }*/
-	  printf("Access(%u): Store and trace unmatched for addr (%x): s(%llX), t(%llX)\n", lines, addr, sval, value);
+	  printf("Access(%u): Store and trace unmatched for addr (%x): s(%llX), t(%llX)\n", totalaccs, addr, sval, value);
 	  assert(0);
 	}
-	else{
-	  if (sval == 0 && zero == 0 && mp != 0){
-	    mp->get_tlb()->zeros++;
-	  }
-	}
       }else{
-	if (zero == 0 && mp != 0){
-	  //printf("Calling cache_allocate for %X\n", addr);
-	  dl1->allocate(addr); // special function to allocate a cache line with all zero
-	  mp->update_block(addr, 1);
-	  // new for 1/9/15 - update MUST come after allocate, which can trigger a writeback and another update_block
-	}
 	dl1->write(addr, value);
       }
-      lines++;
+      totalaccs++;
 
       // clear stats collected during warmup
-      if (lines == skip){
+      if (totalaccs == skip){
 	dl1->clearstats();
 	dl2->clearstats();
-	mp->clearstats();
+	if (mp != 0){
+          mp->clearstats();
+        }
       }
     }
   }
@@ -288,7 +257,7 @@ int main(int argc, char** argv){
   }
 
   printf("%lu initialization mismatches encountered\n", mismatches);
-  printf("Simulation complete after %u accesses\n", lines);
+  printf("Simulation complete after %u accesses\n", totalaccs);
 
   return 0;
 }

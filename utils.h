@@ -3,6 +3,8 @@
 
 #include <iostream>
 
+extern unsigned int totalaccs;
+
 typedef unsigned int i32;
 typedef unsigned long long i64;
 

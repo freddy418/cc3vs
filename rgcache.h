@@ -60,7 +60,7 @@ class rgcache {
   void set_mem(tmemory* sp);
   i32 get_lru();
   void update_lru(i32 entry);
-  i32 write_cache(i32 low, i32 high, i64 data);
+  void write_cache(i32 low, i32 high, i64 data);
   void writeback(i32 index);
   void set_nl(tcache* cp);
   void annul(i32 addr);
